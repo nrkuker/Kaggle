@@ -176,6 +176,7 @@ model2 <- train(Survived ~ .,
                trControl = ctrl,
                preProc = c("BoxCox", "center", "scale")
 )
+summary(model2)
 
 
 fitted <- predict(model2, test, type = "prob")
@@ -188,3 +189,164 @@ cm <- caret::confusionMatrix(data = predict(model2, test),
                              positive = "Yes")
 cm
 auc
+
+
+
+
+
+# TAKE 3
+
+ctrl <- trainControl(
+  method = "cv",
+  number = 10,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  search = "grid"
+)
+
+set.seed(1863)
+model3 <- train(Survived ~ .,
+                data = train,
+                method = "glmStepAIC",
+                trControl = ctrl,
+                preProc = c("BoxCox", "center", "scale")
+)
+summary(model3)
+
+
+fitted3 <- predict(model3, test, type = "prob")
+pred3 <- ROCR::prediction(fitted3[,2], test$Survived)
+perf3 <- ROCR::performance(pred3, "tpr", "fpr")
+auc3 <- performance(pred3, "auc")@y.values %>% as.numeric()
+
+cm3 <- caret::confusionMatrix(data = predict(model3, test), 
+                             reference = test$Survived,
+                             positive = "Yes")
+cm3
+auc3
+# same
+
+
+
+
+
+# TREE-BASED MODELS ############################################################
+
+ctrl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  search = "grid"
+)
+
+search_grid <- expand.grid(
+  iter = c(10, 100, 500),
+  maxdepth = c(2, 3, 5),
+  nu = 10^seq(-6, 0, by = 2)
+)  
+
+set.seed(1863)
+model4 <- train(Survived ~ .,
+                data = train,
+                method = "ada",
+                trControl = ctrl,
+                tuneGrid = search_grid,
+                preProc = c("BoxCox", "center", "scale")
+)
+model4
+plot(model4)
+# nu        maxdepth  iter  ROC        Sens       Spec     
+# 0.000001  5         100   0.8871383  0.9193780  0.6905142
+
+
+
+
+set.seed(1863)
+model5 <- train(Survived ~ .,
+                data = train,
+                method = "ada",
+                trControl = ctrl,
+                tuneGrid = expand.grid(
+                  iter = c(100, 500, 1000),
+                  maxdepth = c(3, 5, 7),
+                  nu = 10 ^ seq(-6, -1, length.out = 5)
+                ), 
+                preProc = c("BoxCox", "center", "scale")
+)
+model5
+plot(model5)
+# nu        maxdepth  iter  ROC        Sens       Spec     
+# 0.000001  7         100   0.8923767  0.9063568  0.7237589
+
+fitted5 <- predict(model5, test, type = "prob")
+pred5 <- ROCR::prediction(fitted5[,2], test$Survived)
+perf5 <- ROCR::performance(pred5, "tpr", "fpr")
+auc5 <- performance(pred5, "auc")@y.values %>% as.numeric()
+
+cm5 <- caret::confusionMatrix(data = predict(model5, test), 
+                              reference = test$Survived,
+                              positive = "Yes")
+cm5
+auc5
+# balacc 0.7877   auc 0.847
+
+
+
+
+
+
+
+
+set.seed(1863)
+model6 <- train(Survived ~ .,
+                data = train,
+                method = "ada",
+                trControl = ctrl,
+                tuneGrid = expand.grid(
+                  iter = c(75, 100, 200),
+                  maxdepth = c(5, 7, 9),
+                  nu = seq(10 ^ -6, 10 ^ -2, length.out = 5)
+                ), 
+                preProc = c("BoxCox", "center", "scale")
+)
+model6
+plot(model6)
+# nu        maxdepth  iter  ROC        Sens       Spec     
+# 0.010000  9         75    0.8900153  0.9193438  0.7070922
+
+
+
+
+
+
+
+
+set.seed(1863)
+model7 <- train(Survived ~ .,
+                data = train,
+                method = "ada",
+                trControl = ctrl,
+                tuneGrid = expand.grid(
+                  iter = c(100, 200, 500, 1000),
+                  maxdepth = c(5, 7, 10),
+                  nu = 0.01
+                ), 
+                preProc = c("BoxCox", "center", "scale")
+)
+model7
+plot(model7)
+# nu        maxdepth  iter  ROC        Sens       Spec     
+# 0.010000  7         100   0.8878048  0.9220437  0.7071809
+
+fitted7 <- predict(model7, test, type = "prob")
+pred7 <- ROCR::prediction(fitted7[,2], test$Survived)
+perf7 <- ROCR::performance(pred7, "tpr", "fpr")
+auc7 <- performance(pred7, "auc")@y.values %>% as.numeric()
+
+cm7 <- caret::confusionMatrix(data = predict(model7, test), 
+                              reference = test$Survived,
+                              positive = "Yes")
+cm7
+auc7
+# balacc 0.7925   auc 0.8466
