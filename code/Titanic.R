@@ -41,6 +41,8 @@ prop.table(table(data$Survived))
 
 
 
+
+
 # DATA CLEANING / PRE-PROCESSING ###############################################
 
 # make empty into missing
@@ -52,8 +54,11 @@ data %<>%
   mutate(
     Relations = SibSp + Parch,
     CabinKnown = as_factor(ifelse(Cabin=="", "No", "Yes")),
-    Pclass = recode(Pclass, `1` = "1st", `2` = "2nd", `3` = "3rd"),
+    Deck = ifelse(Cabin == "", "Unknown", str_extract(Cabin, "[:alpha:]")),   # knowingly simpliyfing here
+    # Pclass = recode(Pclass, `1` = "1st", `2` = "2nd", `3` = "3rd"),
     Survived = recode(Survived, `0` = "No", `1` = "Yes"),
+    Age_Class = Age*Pclass,
+    Fare_pp = Fare / (Relations+1),
     Title = sapply(Name, function(x) {
       str_sub(x,
               start = (str_locate(x, ",")[, 1] + 2),
@@ -62,14 +67,41 @@ data %<>%
   )
 names(data$Title) <- NULL
 
+# group up low-freq titles
 data %<>%
-  mutate(
-    Title_lump = fct_lump_prop(data$Title, prop = 0.1, other_level = "Other")
-  )
+  mutate(Title_group =
+           ifelse(
+             Title %in% c("Don", "Major", "Capt", "Jonkheer", "Rev", "Col", "Sir"),
+             "Mr",
+             ifelse(
+               Title %in% c("the Countess", "Mme", "Lady"),
+               "Mrs",
+               ifelse(Title %in% c("Ms", "Mlle"), 
+                      "Miss",
+                      ifelse((Title == "Dr" & Sex == "male"), 
+                             "Mr",
+                             ifelse((Title == "Dr" & Sex == "female"), 
+                                    "Mrs",
+                                    Title)
+                             )
+                      )
+               )
+             )
+         )
+
+
+str(data)
+
+
+
+
+
+
 
 # make factors
 data %<>% 
-  mutate(across(c("Survived", "Pclass", "Sex", "Embarked", "Title"), as_factor))
+  mutate(across(c("Survived", "Pclass", "Sex", "Embarked", "Title_group", "Deck"), as_factor))
+
 
 
 str(data)
@@ -82,14 +114,15 @@ str(data)
 # DIVIDE TRAIN/TEST ############################################################
 
 # Data partition
-set.seed(42)
+set.seed(4242)
 titanic_index <- 
   initial_split(subset(data, select = -c(PassengerId, Name, Ticket, Cabin,
-                                         Relations, Title)),
+                                         Relations, Title, CabinKnown)),
                 prop = 0.7, strata = "Survived")
 train <- training(titanic_index)
 test <- testing(titanic_index)
 
+# train %>% filter(Deck =="T")
 str(train)
 
 prop.table(table(data$Survived))
@@ -118,8 +151,7 @@ test <- complete(impute_test)
 # TAKE 1 
 options(scipen = 999)
 
-model1 <- glm(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + 
-                CabinKnown + Title_lump
+model1 <- glm(Survived ~ .
                 , family = binomial(link = "logit"), data = train)
 summary(model1)
 
@@ -257,7 +289,7 @@ model4 <- train(Survived ~ .,
 model4
 plot(model4)
 # nu        maxdepth  iter  ROC        Sens       Spec     
-# 0.000001  5         100   0.8871383  0.9193780  0.6905142
+# 0.000001  5         500   0.8901591  0.8881066  0.7406915
 
 
 
@@ -270,14 +302,15 @@ model5 <- train(Survived ~ .,
                 tuneGrid = expand.grid(
                   iter = c(100, 500, 1000),
                   maxdepth = c(3, 5, 7),
-                  nu = 10 ^ seq(-6, -1, length.out = 5)
+                  nu = seq(10 ^ -6, 10 ^ -1, length.out = 5)
                 ), 
                 preProc = c("BoxCox", "center", "scale")
 )
 model5
 plot(model5)
-# nu        maxdepth  iter  ROC        Sens       Spec     
-# 0.000001  7         100   0.8923767  0.9063568  0.7237589
+# nu          maxdepth  iter  ROC        Sens       Spec     
+# 0.000001    7         100   0.8923767  0.9063568  0.7237589
+# 0.02500075  7          100  0.8897037  0.8958988  0.7364362
 
 fitted5 <- predict(model5, test, type = "prob")
 pred5 <- ROCR::prediction(fitted5[,2], test$Survived)
@@ -315,7 +348,9 @@ plot(model6)
 # nu        maxdepth  iter  ROC        Sens       Spec     
 # 0.010000  9         75    0.8900153  0.9193438  0.7070922
 
-
+caret::confusionMatrix(data = predict(model6, test), 
+                       reference = test$Survived,
+                       positive = "Yes")
 
 
 
@@ -365,6 +400,9 @@ plot(model9)
 # ROC        Sens       Spec     
 # 0.8706349  0.872488  0.7282801
 
+caret::confusionMatrix(data = predict(model9, test), 
+                       reference = test$Survived,
+                       positive = "Yes")
 
 
 
@@ -444,7 +482,7 @@ plot(model8)
 confusionMatrix(data = (predict(model8, newdata = test)), 
                 reference = test$Survived, 
                 positive = "Yes")
-# Acc 0.7387  Sens 0.7864  Kappa 0.4533
+# Acc 0.8209  Sens 0.6990  Kappa 0.6116
 
 
 
@@ -490,6 +528,7 @@ plot(model11)
 # 0.1                  5         1                  600  0.8770054 0.8542379 0.7408688
 # 0.1                  4         1                 1000  0.8783283 0.8541695 0.7365248
 # 0.01                 5         1                 4800  0.8777582 0.8438141 0.7407801
+# 0.01                 5         3                  800  0.895163  0.890704  0.7491135 
 
 fitted11 <- predict(model11, test, type = "prob")
 pred11 <- ROCR::prediction(fitted11[,2], test$Survived)
