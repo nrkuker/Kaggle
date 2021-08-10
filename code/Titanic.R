@@ -375,16 +375,16 @@ model10 <- train(Survived ~ .,
                 method = "ranger",
                 trControl = ctrl,
                 tuneGrid = expand.grid(
-                  mtry = 2:6,
-                  splitrule = "gini",
-                  min.node.size = c(3, 5, 7, 10, 12, 15)
+                  mtry = seq(2, 10, by=2),
+                  splitrule = c("gini", "extratrees", "hellinger"),
+                  min.node.size = c(1, 3, 5, 7)
                 ), 
                 preProc = c("BoxCox", "center", "scale")
 )
 model10
 plot(model10)
 # mtry  min.node.size  ROC        Sens       Spec     
-# 6      7             0.8809529  0.8960355  0.7155142
+# 6      5             0.8800839  0.8934381  0.7197695
 
 fitted10 <- predict(model10, test, type = "prob")
 pred10 <- ROCR::prediction(fitted10[,2], test$Survived)
@@ -396,7 +396,7 @@ cm10 <- caret::confusionMatrix(data = predict(model10, test),
                               positive = "Yes")
 cm10
 auc10
-# balacc 0.8077   auc 0.852
+# balacc 0.8029   auc 0.846
 
 
 
@@ -445,4 +445,61 @@ confusionMatrix(data = (predict(model8, newdata = test)),
                 reference = test$Survived, 
                 positive = "Yes")
 # Acc 0.7387  Sens 0.7864  Kappa 0.4533
+
+
+
+
+
+
+# BOOSTING #####################################################################
+
+gbm_ctrl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  search = "grid"
+)
+
+gbm_grid <- expand.grid(
+  n.trees = (1:50)*100,
+  interaction.depth = 2:5, 
+  shrinkage = c(0.1, 0.01),
+  n.minobsinnode = c(1, 3, 5)
+)
+  # Tuning parameters:
+  # 
+  # n.trees (# Boosting Iterations)
+  #   interaction.depth (Max Tree Depth)
+  #   shrinkage (Shrinkage)
+  #   n.minobsinnode (Min. Terminal Node Size)
+    
+    
+set.seed(1863)
+model11 <- train(Survived ~ .,
+                 data = train,
+                 method = "gbm",
+                 trControl = gbm_ctrl,
+                 tuneGrid = gbm_grid, 
+                 preProc = c("BoxCox", "center", "scale"),
+                 verbose = F
+)
+model11
+plot(model11)
+# shrinkage  interaction.depth  n.minobsinnode  n.trees  ROC        Sens       Spec      
+# 0.1                  5         1                  600  0.8770054 0.8542379 0.7408688
+# 0.1                  4         1                 1000  0.8783283 0.8541695 0.7365248
+# 0.01                 5         1                 4800  0.8777582 0.8438141 0.7407801
+
+fitted11 <- predict(model11, test, type = "prob")
+pred11 <- ROCR::prediction(fitted11[,2], test$Survived)
+perf11 <- ROCR::performance(pred11, "tpr", "fpr")
+auc11 <- performance(pred11, "auc")@y.values %>% as.numeric()
+
+cm11 <- caret::confusionMatrix(data = predict(model11, test), 
+                               reference = test$Survived,
+                               positive = "Yes")
+cm11
+auc11
+# balacc 0.7926   auc 0.855
 
