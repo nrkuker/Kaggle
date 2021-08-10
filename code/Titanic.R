@@ -350,3 +350,99 @@ cm7 <- caret::confusionMatrix(data = predict(model7, test),
 cm7
 auc7
 # balacc 0.7925   auc 0.8466
+
+
+
+set.seed(1863)
+model9 <- train(Survived ~ .,
+                data = train,
+                method = "treebag",
+                trControl = ctrl,
+                preProc = c("BoxCox", "center", "scale")
+)
+model9
+plot(model9)
+# ROC        Sens       Spec     
+# 0.8706349  0.872488  0.7282801
+
+
+
+
+
+set.seed(1863)
+model10 <- train(Survived ~ .,
+                data = train,
+                method = "ranger",
+                trControl = ctrl,
+                tuneGrid = expand.grid(
+                  mtry = 2:6,
+                  splitrule = "gini",
+                  min.node.size = c(3, 5, 7, 10, 12, 15)
+                ), 
+                preProc = c("BoxCox", "center", "scale")
+)
+model10
+plot(model10)
+# mtry  min.node.size  ROC        Sens       Spec     
+# 6      7             0.8809529  0.8960355  0.7155142
+
+fitted10 <- predict(model10, test, type = "prob")
+pred10 <- ROCR::prediction(fitted10[,2], test$Survived)
+perf10 <- ROCR::performance(pred10, "tpr", "fpr")
+auc10 <- performance(pred10, "auc")@y.values %>% as.numeric()
+
+cm10 <- caret::confusionMatrix(data = predict(model10, test), 
+                              reference = test$Survived,
+                              positive = "Yes")
+cm10
+auc10
+# balacc 0.8077   auc 0.852
+
+
+
+
+
+
+
+
+
+
+
+
+# SUPPORT VECTOR MACHINES ######################################################
+
+# Define parameters
+ctrl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  search = "grid"
+)
+
+# svmGrid <- expand.grid(C = 10^seq(-6, 2, by = 1),
+#                        sigma = 10^seq(-6, 2, by = 1))
+svmGrid <- expand.grid(C = 10^seq(-6, 2, by = 1),
+                       sigma = seq(10^-6, 0.5, length.out = 10))
+
+
+# Define and save model
+set.seed(1863)
+model8 <- train(
+  Survived ~ .,
+  data = train,
+  method = "svmRadial", 
+  trControl = ctrl,
+  tuneGrid = svmGrid,
+  preProcess = c("center", "scale")
+)
+model8
+plot(model8)
+# C     sigma       ROC        Sens       Spec     
+# 1.00  0.05555644  0.8713406  0.8986671  0.7238475
+
+confusionMatrix(data = (predict(model8, newdata = test)), 
+                reference = test$Survived, 
+                positive = "Yes")
+# Acc 0.7387  Sens 0.7864  Kappa 0.4533
+
